@@ -33,16 +33,33 @@ async def create_pool(loop, **kw):
     )
 
 async def select(sql, args, size=None):
-    log(sql, args)  # 记录日志
-    global __pool
-    # 使用数据库连接池进行查询操作
+    log(sql, args)  # 记录日志，调用日志函数记录SQL语句和参数
+    global __pool  # 引用全局变量数据库连接池
+    # 使用异步上下文管理器获取数据库连接
     with (await __pool) as conn:
+        # 在连接上创建一个游标，以字典方式返回结果
         cur = await conn.cursor(aiomysql.DictCursor)
+        # 执行SQL语句，使用参数代替占位符
         await cur.execute(sql.replace('?', '%s'), args or ())
         if size:
+            # 如果设置了size，获取指定数量的结果集
             rs = await cur.fetchmany(size)
         else:
+            # 否则获取所有结果集
             rs = await cur.fetchall()
         await cur.close()  # 关闭游标
         logging.info('rows returned: %s' % len(rs))  # 记录返回行数
-        return rs
+        return rs  # 返回结果集
+
+@asyncio.coroutine
+def execute(sql, args):
+    log(sql)  # 记录日志，调用日志函数记录SQL语句
+    with (yield from __pool) as conn:  # 通过异步生成器从连接池获取连接
+        try:
+            cur = yield from conn.cursor()  # 从连接上获取游标
+            yield from cur.execute(sql.replace('?', '%s'), args)  # 执行SQL语句，用参数替换占位符
+            affected = cur.rowcount  # 获取受影响的行数
+            yield from cur.close()  # 关闭游标
+        except BaseException as e:
+            raise  # 发生异常时抛出异常
+        return affected  # 返回受影响的行数

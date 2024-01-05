@@ -51,15 +51,15 @@ async def select(sql, args, size=None):
         logging.info('rows returned: %s' % len(rs))  # 记录返回行数
         return rs  # 返回结果集
 
-@asyncio.coroutine
-def execute(sql, args):
+
+async def execute(sql, args):
     log(sql)  # 记录日志，调用日志函数记录SQL语句
-    with (yield from __pool) as conn:  # 通过异步生成器从连接池获取连接
+    with (await __pool) as conn:  # 通过异步生成器从连接池获取连接
         try:
-            cur = yield from conn.cursor()  # 从连接上获取游标
-            yield from cur.execute(sql.replace('?', '%s'), args)  # 执行SQL语句，用参数替换占位符
+            cur = await conn.cursor()  # 从连接上获取游标
+            await cur.execute(sql.replace('?', '%s'), args)  # 执行SQL语句，用参数替换占位符
             affected = cur.rowcount  # 获取受影响的行数
-            yield from cur.close()  # 关闭游标
+            await cur.close()  # 关闭游标
         except BaseException as e:
             raise  # 发生异常时抛出异常
         return affected  # 返回受影响的行数

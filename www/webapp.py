@@ -13,3 +13,36 @@ loop = asyncio.get_event_loop()  # 获取事件循环对象
 loop.run_until_complete(init(loop))  # 运行初始化函数
 loop.run_forever()  # 开始事件循环
 
+
+async def create_pool(loop, **kw):
+    # 记录日志，表示正在创建数据库连接池
+    logging.info('create database connection pool...')
+    global __pool
+    # 创建一个数据库连接池
+    __pool = await aiomysql.create_pool(
+        host=kw.get('host', 'localhost'),  # 数据库主机，默认为localhost
+        port=kw.get('port', 3306),          # 数据库端口，默认为3306
+        user=kw['user'],                    # 数据库用户名
+        password=kw['password'],            # 数据库密码
+        db=kw['db'],                        # 数据库名称
+        charset=kw.get('charset', 'utf8'),  # 字符集，默认为utf8
+        autocommit=kw.get('autocommit', True),  # 自动提交，默认为True
+        maxsize=kw.get('maxsize', 10),      # 连接池最大连接数，默认为10
+        minsize=kw.get('minsize', 1),       # 连接池最小连接数，默认为1
+        loop=loop                           # 事件循环
+    )
+
+async def select(sql, args, size=None):
+    log(sql, args)  # 记录日志
+    global __pool
+    # 使用数据库连接池进行查询操作
+    with (await __pool) as conn:
+        cur = await conn.cursor(aiomysql.DictCursor)
+        await cur.execute(sql.replace('?', '%s'), args or ())
+        if size:
+            rs = await cur.fetchmany(size)
+        else:
+            rs = await cur.fetchall()
+        await cur.close()  # 关闭游标
+        logging.info('rows returned: %s' % len(rs))  # 记录返回行数
+        return rs
